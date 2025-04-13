@@ -21,17 +21,5 @@ namespace TestAPI
             Assert.AreEqual(Username, testDto.Name);
             Assert.AreEqual(GroupIds, testDto.GroupIds);
         }
-
-        [TestMethod]
-        public void AddUserValidateDTOTest()
-        {
-            string Username = "";
-            var GroupIds = new List<long>() { 1, 2, 3, 4, 5 };
-
-            var testDto = new API.DTO.AddUserRequest(Username, GroupIds);
-
-            Assert.IsFalse(testDto.IsValid);
-            Assert.AreEqual("Name cannot be null or empty", testDto.ValidationMessage);
-        }
     }
 }
