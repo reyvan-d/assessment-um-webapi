@@ -1,0 +1,101 @@
+﻿@page "/groups"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Client
+
+<PageTitle>Groups</PageTitle>
+
+<h1>Groups</h1>
+
+<div class="tabs">
+    <button @onclick="() => SetActiveTab(0)" class=@(IsActiveTab(0) ? "active" : "")>Users per Group</button>
+</div>
+
+@if (_activeTab == 0)
+{
+    <div class="mb-3">
+        <label for="groupId" class="form-label">GroupId:</label>
+        <input type="text"
+               id="groupId"
+        class="form-control"
+               @bind="groupId"
+        required />
+    </div>
+
+    <p>
+        <button class="btn btn-primary" @onclick="GetUserCountForGroup">Fetch User Count</button>
+    </p>
+    <p>
+        <em>Total Users: @UsrCount</em>
+    </p>
+
+    @if (invalidInput)
+    {
+        <p><em style="color:red">Invalid Input</em></p>
+    }
+    else if (CountFetchError)
+    {
+        <p><em style="color:red">Error fetching count</em></p>
+    }
+}
+
+@code {
+    private int _activeTab = 0;
+    private string groupId = "";
+    private bool invalidInput, CountFetchError = false;
+    private long? UsrCount;
+
+    private bool IsActiveTab(int tabNumber) => _activeTab == tabNumber;
+
+    private void SetActiveTab(int tabNumber) => _activeTab = tabNumber;
+
+    protected override void OnInitialized()
+    {
+        Client.BaseAddress = new Uri("https://localhost:7267");
+        Client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    private async Task GetUserCountForGroup()
+    {
+        if (long.TryParse(groupId, out long Id))
+        {
+            invalidInput = false;
+            GetGroupUserCountReq req = new GetGroupUserCountReq(Id);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/Group/GetTotalUsersForGroup");
+            request.Content = new StringContent(JsonSerializer.Serialize<GetGroupUserCountReq>(req), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                CountFetchError = false;
+                using var responseStream = await response.Content.ReadAsStreamAsync();
+                var result = await JsonSerializer.DeserializeAsync<UserCountResult>(responseStream);
+                UsrCount = result.result;
+            }
+            else
+            {
+                CountFetchError = true;
+            }
+        }
+        else
+        {
+            invalidInput = true;
+        }
+    }
+
+    private class GetGroupUserCountReq
+    {
+        public GetGroupUserCountReq(long groupId)
+        {
+            GroupId = groupId;
+        }
+
+        public long GroupId { get; set; }
+    }
+
+    private class UserCountResult
+    {
+        public long result { get; set; }
+    }
+}

@@ -1,0 +1,115 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Client
+
+<PageTitle>Home</PageTitle>
+
+<h1>.NET ASSESSMENT</h1>
+
+<div>
+    <button class="btn btn-primary" @onclick="InsertTestData">Insert Test Data</button>
+</div>
+
+@if (!Running)
+{
+    @if (Inserted)
+    {
+        <p><em>Done</em></p>
+    }
+    else if (InsertFailed)
+    {
+        <p><em style="color:red">Error inserting test data</em></p>
+    }
+}
+else
+{
+    <p><em>Inserting...</em></p>
+}
+
+@code {
+    private bool Running = false;
+    private bool Inserted = false;
+    private bool InsertFailed = false;
+
+    private async Task InsertTestData()
+    {
+        Running = true;
+
+        Client.BaseAddress = new Uri("https://localhost:7267");
+        Client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        await AddPermissions();
+
+        if (!InsertFailed)
+            await AddGroups();
+
+        Running = false;
+    }
+
+    private async Task AddPermissions()
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/Permission/AddPermission");
+
+            PermissionDetails permission = new PermissionDetails();
+            permission.name = Guid.NewGuid().ToString();
+            request.Content = new StringContent(JsonSerializer.Serialize<PermissionDetails>(permission), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                InsertFailed = true;
+            }
+        }
+    }
+
+    private async Task AddGroups()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/Group/AddGroup");
+            GroupDetails group = new GroupDetails();
+            group.name = Guid.NewGuid().ToString();
+
+            var permissionIds = new List<long>() { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+            Random rng = new Random();
+            int idx = 0;
+
+            for (int k = permissionIds.Count() - 1; k > 0; k--)
+            {
+                idx = rng.Next(0, k + 1);
+                var tmp = permissionIds[k];
+                permissionIds[k] = permissionIds[idx];
+                permissionIds[idx] = tmp;
+            }
+
+            var idsToInsert = permissionIds.Take(3).ToList();
+            group.permissionIds = idsToInsert;
+            request.Content = new StringContent(JsonSerializer.Serialize<GroupDetails>(group), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Inserted = true;
+            }
+            else
+            {
+                InsertFailed = true;
+            }
+        }
+    }
+
+    private class PermissionDetails
+    {
+        public string name { get; set; }
+    }
+
+    private class GroupDetails
+    {
+        public string name { get; set; }
+        public List<long> permissionIds { get; set; }
+    }
+}

@@ -1,0 +1,593 @@
+﻿@page "/users"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject HttpClient Client
+
+<PageTitle>Users</PageTitle>
+
+<h1>Users</h1>
+
+<div class="tabs">
+    <button @onclick="() => SetActiveTab(0)" class=@(IsActiveTab(0) ? "active" : "")>Get</button>
+    <button @onclick="() => SetActiveTab(1)" class=@(IsActiveTab(1) ? "active" : "")>Get All For Groups</button>
+    <button @onclick="() => SetActiveTab(2)" class=@(IsActiveTab(2) ? "active" : "")>Add</button>
+    <button @onclick="() => SetActiveTab(3)" class=@(IsActiveTab(3) ? "active" : "")>Update</button>
+    <button @onclick="() => SetActiveTab(4)" class=@(IsActiveTab(4) ? "active" : "")>Delete</button>
+    <button @onclick="() => SetActiveTab(5)" class=@(IsActiveTab(5) ? "active" : "")>Count</button>
+</div>
+
+@if (_activeTab == 0) //GetSingle
+{
+    <div class="mb-3">
+        <label for="userId" class="form-label">UserId:</label>
+        <input type="text"
+        id="userId"
+        class="form-control"
+        @bind="userId"
+        required />
+    </div>
+
+    @if (FetchingUser)
+    {
+        @if (UserFetchError)
+        {
+            <p><em style="color:red">Error fetching user</em></p>
+        }
+        else
+        {
+            <p><em>Loading User...</em></p>
+        }
+    }
+    else
+    {
+        @if (null != CurrUser)
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>UserId</th>
+                        <th>UserName</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>@CurrUser.userId</td>
+                        <td>@CurrUser.userName</td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+    }
+
+    <button type="submit" class="btn btn-primary" @onclick="GetSingleUser">Fetch</button>
+
+    @if (invalidInput)
+    {
+        <p><em style="color:red">Invalid Input</em></p>
+    }
+}
+else if (_activeTab == 1) //GetAll
+{
+    <p>
+        <button class="btn btn-primary" @onclick="GetAllUsers">Fetch Users</button>
+    </p>
+
+    @if (AllUsers == null)
+    {
+        @if (Fetching)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else if (FetchError)
+        {
+            <p><em style="color:red">Failed to retrieve data.</em></p>
+        }
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>UserId</th>
+                    <th>UserName</th>
+                    <th>GroupId</th>
+                    <th>GroupName</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in AllUsers.result.users)
+                {
+                    @foreach (var group in AllUsers.result.users.FirstOrDefault(u => u.userId == user.userId).groups)
+                    {
+                        <tr>
+                            <td>@user.userId</td>
+                            <td>@user.userName</td>
+                            <td>@group.Key</td>
+                            <td>@group.Value</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+}
+else if (_activeTab == 2) //Add
+{
+    <div class="mb-3">
+        <label for="userName" class="form-label">Username:</label>
+        <input type="text"
+        id="userName"
+        class="form-control"
+        @bind="userName"
+        required />
+    </div>
+
+    @if (FetchingGroups)
+    {
+        @if (GroupFetchError)
+        {
+            <p><em style="color:red">Error fetching groups</em></p>
+        }
+        else
+        {
+            <p><em>Loading Groups...</em></p>
+        }
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>GroupId</th>
+                    <th>GroupName</th>
+                    <th>Selected</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in AllGroups)
+                {
+                    <tr>
+                        <td>@group.groupId</td>
+                        <td>@group.groupName</td>
+                        <td>
+                            <label>
+                                <input type="checkbox"
+                                id="@group.groupId"
+                                name="@group.groupId"
+                                @onchange="() => ToggleGroupSelection(group.groupId)"
+                                checked="@group.selected">
+                            </label>
+                        </td>
+                    </tr>
+                }
+                @if (UserInserted)
+                {
+                    <p><em>Done</em></p>
+                }
+                else if (UserInsertFailed)
+                {
+                    <p><em style="color:red">Error adding user</em></p>
+                }
+            </tbody>
+        </table>
+    }
+
+    <button type="submit" class="btn btn-primary" @onclick="AddUser">Submit</button>
+
+    @if (invalidInput)
+    {
+        <p><em style="color:red">Invalid Input</em></p>
+    }
+}
+else if (_activeTab == 3) //Update
+{
+    <div class="mb-3">
+        <label for="userName" class="form-label">Username:</label>
+        <input type="text"
+        id="userName"
+        class="form-control"
+        @bind="userName"
+        required />
+    </div>
+
+    <div class="mb-3">
+        <label for="userId" class="form-label">UserId:</label>
+        <input type="text"
+        id="userId"
+        class="form-control"
+        @bind="userId"
+        required />
+    </div>
+
+    @if (FetchingGroups)
+    {
+        @if (GroupFetchError)
+        {
+            <p><em style="color:red">Error fetching groups</em></p>
+        }
+        else
+        {
+            <p><em>Loading Groups...</em></p>
+        }
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>GroupId</th>
+                    <th>GroupName</th>
+                    <th>Selected</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in AllGroups)
+                {
+                    <tr>
+                        <td>@group.groupId</td>
+                        <td>@group.groupName</td>
+                        <td>
+                            <label>
+                                <input type="checkbox"
+                                id="@group.groupId"
+                                name="@group.groupId"
+                                @onchange="() => ToggleGroupSelection(group.groupId)"
+                                checked="@group.selected">
+                            </label>
+                        </td>
+                    </tr>
+                }
+                @if (UserUpdated)
+                {
+                    <p><em>Done</em></p>
+                }
+                else if (UserUpdateFailed)
+                {
+                    <p><em style="color:red">Error updating user</em></p>
+                }
+            </tbody>
+        </table>
+    }
+
+    <button type="submit" class="btn btn-primary" @onclick="UpdateUser">Submit</button>
+
+    @if (invalidInput)
+    {
+        <p><em style="color:red">Invalid Input</em></p>
+    }
+}
+else if (_activeTab == 4) //Delete
+{
+    <div class="mb-3">
+        <label for="userId" class="form-label">UserId:</label>
+        <input type="text"
+        id="userId"
+        class="form-control"
+        @bind="userId"
+        required />
+    </div>
+
+    <button type="submit" class="btn btn-primary" @onclick="DeleteSingleUser">Delete</button>
+
+    @if (invalidInput)
+    {
+        <p><em style="color:red">Invalid Input</em></p>
+    }
+    else if (UserDeleted)
+    {
+        <p><em>User Deleted</em></p>
+    }
+    else if (UserDeleteError)
+    {
+        <p><em style="color:red">Error deleting user</em></p>
+    }
+}
+else //Count
+{
+    <p>
+        <button class="btn btn-primary" @onclick="GetUserCount">Fetch User Count</button>
+    </p>
+    <p>
+        <em>Total Users: @UsrCount</em>
+    </p>
+}
+
+@code {
+    private int _activeTab = 0;
+    private RootObject? AllUsers;
+    private bool FetchError, GroupFetchError, FetchingGroups, Fetching, invalidInput, UserInserted, UserInsertFailed, FetchingUser, UserFetchError, UserDeleted, UserDeleteError, UserUpdated, UserUpdateFailed = false;
+    private string userName = "";
+    private string userId = "";
+    private List<GroupDetails>? AllGroups;
+    private User? CurrUser;
+    private long? UsrCount;
+
+    private bool IsActiveTab(int tabNumber) => _activeTab == tabNumber;
+
+    private void SetActiveTab(int tabNumber) => _activeTab = tabNumber;
+
+    private void ToggleGroupSelection(long groupId)
+    {
+        var group = AllGroups.Find(ag => ag.groupId == groupId);
+        if (null != group)
+        {
+            group.selected = !group.selected;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Client.BaseAddress = new Uri("https://localhost:7267");
+        Client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/Group/GetAllGroups");
+
+        var response = await Client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            using var responseStream = await response.Content.ReadAsStreamAsync();
+            var groupResults = await JsonSerializer.DeserializeAsync<GroupResults>(responseStream);
+
+            AllGroups = new List<GroupDetails>();
+            foreach (var group in groupResults.groups)
+            {
+                AllGroups.Add(new GroupDetails(group.Key, group.Value));
+            }
+
+            GroupFetchError = false;
+        }
+        else
+        {
+            GroupFetchError = true;
+        }
+    }
+
+    private async Task GetSingleUser()
+    {
+        if (long.TryParse(userId, out long Id))
+        {
+            invalidInput = false;
+            FetchingUser = true;
+            GetUser user = new GetUser(Id);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/User/GetUser");
+            request.Content = new StringContent(JsonSerializer.Serialize<GetUser>(user), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                FetchingUser = false;
+                UserFetchError = false;
+                using var responseStream = await response.Content.ReadAsStreamAsync();
+                CurrUser = await JsonSerializer.DeserializeAsync<User>(responseStream);
+            }
+            else
+            {
+                UserFetchError = true;
+            }
+        }
+        else
+        {
+            invalidInput = true;
+        }
+    }
+
+    private async Task GetAllUsers()
+    {
+        Fetching = true;
+        AllUsers = null;
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/User/GetAllUsers");
+
+        var response = await Client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            using var responseStream = await response.Content.ReadAsStreamAsync();
+            AllUsers = await JsonSerializer.DeserializeAsync<RootObject>(responseStream);
+        }
+        else
+        {
+            FetchError = true;
+        }
+
+        Fetching = false;
+    }
+
+    private async Task AddUser()
+    {
+        UserInserted = false;
+        if (string.IsNullOrEmpty(userName))
+        {
+            invalidInput = true;
+        }
+        else
+        {
+            invalidInput = false;
+            List<long> selectedIds = new List<long>();
+
+            if (null != AllGroups)
+                selectedIds = AllGroups.Where(ag => ag.selected).Select(g => g.groupId).ToList();
+
+            GroupRequest group = new GroupRequest(userName, selectedIds);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/User/AddUser");
+            request.Content = new StringContent(JsonSerializer.Serialize<GroupRequest>(group), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                UserInserted = true;
+                UserInsertFailed = false;
+            }
+            else
+            {
+                UserInsertFailed = true;
+            }
+        }
+    }
+
+    private async Task UpdateUser()
+    {
+        UserUpdated = false;
+        if (!string.IsNullOrEmpty(userName) && long.TryParse(userId, out long Id))
+        {
+            invalidInput = false;
+            List<long> selectedIds = new List<long>();
+
+            if (null != AllGroups)
+                selectedIds = AllGroups.Where(ag => ag.selected).Select(g => g.groupId).ToList();
+
+            UpdateRequest update = new UpdateRequest(Id, userName, selectedIds);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/User/UpdateUser");
+            var json = JsonSerializer.Serialize<UpdateRequest>(update);
+            request.Content = new StringContent(JsonSerializer.Serialize<UpdateRequest>(update), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                UserUpdated = true;
+                UserUpdateFailed = false;
+            }
+            else
+            {
+                UserUpdateFailed = true;
+            }
+        }
+        else
+        {
+            invalidInput = true;
+        }
+    }
+
+    private async Task DeleteSingleUser()
+    {
+        if (long.TryParse(userId, out long Id))
+        {
+            invalidInput = false;
+            GetUser user = new GetUser(Id);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/User/DeleteUser");
+            request.Content = new StringContent(JsonSerializer.Serialize<GetUser>(user), System.Text.Encoding.UTF8, "application/json");
+            var response = await Client.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                UserDeleted = true;
+                UserDeleteError = false;
+                using var responseStream = await response.Content.ReadAsStreamAsync();
+                CurrUser = await JsonSerializer.DeserializeAsync<User>(responseStream);
+            }
+            else
+            {
+                UserDeleteError = true;
+            }
+        }
+        else
+        {
+            invalidInput = true;
+        }
+    }
+
+    private async Task GetUserCount()
+    {
+        UsrCount = null;
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/User/GetUserCount");
+        var response = await Client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            using var responseStream = await response.Content.ReadAsStreamAsync();
+            var result = await JsonSerializer.DeserializeAsync<UserCountResult>(responseStream);
+            UsrCount = result.result;
+        }
+        else
+        {
+            FetchError = true;
+        }
+
+        Fetching = false;
+    }
+
+    private class UserCountResult
+    {
+        public long result { get; set; }
+    }
+
+    private class RootObject
+    {
+        public Result result { get; set; }
+    }
+
+    private class Result
+    {
+        public List<UserDetails> users { get; set; }
+    }
+
+    private class UserDetails
+    {
+        public long userId { get; set; }
+        public string userName { get; set; }
+        public Dictionary<long, string> groups { get; set; }
+    }
+
+    private class GetUser
+    {
+        public GetUser(long userId)
+        {
+            UserId = userId;
+        }
+
+        public long UserId { get; set; }
+    }
+
+    private class User
+    {
+        public long userId { get; set; }
+        public string userName { get; set; }
+    }
+
+    private class GroupResults
+    {
+        public Dictionary<long, string> groups { get; set; }
+    }
+
+    private class GroupDetails
+    {
+        public GroupDetails(long GroupId, string GroupName)
+        {
+            groupId = GroupId;
+            groupName = GroupName;
+            selected = false;
+        }
+
+        public long groupId { get; set; }
+        public string groupName { get; set; }
+        public bool selected { get; set; }
+    }
+
+    private class GroupRequest
+    {
+        public GroupRequest(string name, List<long> groupIds)
+        {
+            Name = name;
+            GroupIds = groupIds;
+        }
+
+        public string Name { get; set; }
+        public List<long> GroupIds { get; set; }
+    }
+
+    private class UpdateRequest
+    {
+        public UpdateRequest(long userId, string name, List<long> groupIds)
+        {
+            UserId = userId;
+            Name = name;
+            GroupIds = groupIds;
+        }
+
+        public long UserId { get; set; }
+        public string Name { get; set; }
+        public List<long> GroupIds { get; set; }
+    }
+}
